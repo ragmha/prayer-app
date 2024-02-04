@@ -14,9 +14,7 @@ const Layout = () => {
         options={{
           tabBarLabel: 'Home',
           title: 'Home',
-          tabBarIcon: ({ color, size }) => (
-            <AntDesign name="home" size={size} color={color} />
-          ),
+          tabBarIcon: ({ color, size }) => <AntDesign name="home" size={size} color={color} />,
         }}
       />
     </Tabs>
