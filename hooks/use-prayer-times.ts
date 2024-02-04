@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Location from 'expo-location'
 
 export enum Prayer {
@@ -17,6 +17,10 @@ export interface Item {
   time: string
 }
 
+const CACHE_EXPIRATION_TIME = 24 * 60 * 60 * 1000 // 24 hours in milliseconds
+const PRAYER_TIME_STORAGE_KEY = 'prayer_times_cache'
+const TIMESTAMP_STORAGE_KEY = 'prayer_times_timestamp'
+
 export const usePrayerTimes = () => {
   const [location, setLocation] = useState<Location.LocationObject | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -25,10 +29,28 @@ export const usePrayerTimes = () => {
 
   const fetchPrayerTimes = async (latitude?: number, longitude?: number, date?: Date) => {
     const dateString = date?.toISOString().split('T')[0]
+    const cacheKey = `${dateString}_${latitude}_${longitude}`
 
     try {
+      const cachedData = await AsyncStorage.getItem(PRAYER_TIME_STORAGE_KEY)
+      const cachedPrayerTimes = JSON.parse(cachedData || '{}')
+
+      const cachedTimestamp = await AsyncStorage.getItem(TIMESTAMP_STORAGE_KEY)
+      const lastUpdated = cachedTimestamp ? new Date(cachedTimestamp) : null
+
+      const TimeZone = 'Europe/Helsinki'
+
+      const isDateStale =
+        !lastUpdated || // No timestamp available
+        (lastUpdated && Date.now() - lastUpdated.getTime() > CACHE_EXPIRATION_TIME)
+
+      if (cachedPrayerTimes[cacheKey] && !isDateStale) {
+        setPrayers(cachedPrayerTimes[cacheKey])
+        return
+      }
+
       const response = await fetch(
-        `http://api.aladhan.com/v1/timings/${dateString}?latitude=${latitude}&longitude=${longitude}&method=2&timezonestring=Europe/Helsinki`,
+        `http://api.aladhan.com/v1/timings/${dateString}?latitude=${latitude}&longitude=${longitude}&method=2&timezonestring=${TimeZone}`,
       )
 
       if (!response.ok) {
@@ -46,7 +68,10 @@ export const usePrayerTimes = () => {
         time: prayerTimes[title] || '',
       }))
 
-      console.log({ newPrayers })
+      const updatedCachedData = { ...cachedPrayerTimes, [cacheKey]: newPrayers }
+      await AsyncStorage.setItem(PRAYER_TIME_STORAGE_KEY, JSON.stringify(updatedCachedData))
+
+      await AsyncStorage.setItem(TIMESTAMP_STORAGE_KEY, new Date().toISOString())
 
       setPrayers(newPrayers)
     } catch (error) {

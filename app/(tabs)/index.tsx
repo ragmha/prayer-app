@@ -5,27 +5,23 @@ import { AntDesign } from '@expo/vector-icons'
 import { Header } from 'components/Header'
 import { Item, usePrayerTimes } from '@/hooks/use-prayer-times'
 
-interface PrayerItemProps {
+const PrayerItem: FC<{
   item: Item
-  handleCheck: (id: number) => void
-}
-
-const PrayerItem: FC<PrayerItemProps> = ({ item, handleCheck }) => {
-  return (
-    <View style={styles.container}>
-      <TouchableOpacity style={styles.item} onPress={() => handleCheck(item.id)}>
-        <View style={item.checked ? styles.checkedCheckbox : styles.uncheckedCheckbox}>
-          {item.checked && <AntDesign name="checkcircle" size={32} color="black" />}
-        </View>
-      </TouchableOpacity>
-      <Text style={item.checked ? styles.strikethroughTitle : styles.title}>{item.title}</Text>
-      <Text style={styles.time}>{item.time}</Text>
-    </View>
-  )
-}
+  handleCheck(id: number): void
+}> = ({ item, handleCheck }) => (
+  <View style={styles.container}>
+    <TouchableOpacity style={styles.item} onPress={() => handleCheck(item.id)}>
+      <View style={item.checked ? styles.checkedCheckbox : styles.uncheckedCheckbox}>
+        {item.checked && <AntDesign name="checkcircle" size={32} color="black" />}
+      </View>
+    </TouchableOpacity>
+    <Text style={item.checked ? styles.strikethroughTitle : styles.title}>{item.title}</Text>
+    <Text style={styles.time}>{item.time}</Text>
+  </View>
+)
 
 const Home: FC = () => {
-  const { prayers, currentDay, goToNextDay, goToPreviousDay, handleCheck } = usePrayerTimes()
+  const { prayers, handleCheck, currentDay, goToNextDay, goToPreviousDay } = usePrayerTimes()
 
   return (
     <>
