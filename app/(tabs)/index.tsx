@@ -1,9 +1,10 @@
-import { FlatList, TouchableOpacity, Text, StyleSheet, View } from 'react-native'
-import { FC } from 'react'
+import { FlatList, TouchableOpacity, Text, StyleSheet, View, ActivityIndicator } from 'react-native'
+import React, { FC } from 'react'
 
 import { AntDesign } from '@expo/vector-icons'
-import { Header } from 'components/Header'
+
 import { Item, usePrayerTimes } from '@/hooks/use-prayer-times'
+import { Header } from '@/components/Header'
 
 const PrayerItem: FC<{
   item: Item
@@ -21,7 +22,8 @@ const PrayerItem: FC<{
 )
 
 const Home: FC = () => {
-  const { prayers, handleCheck, currentDay, goToNextDay, goToPreviousDay } = usePrayerTimes()
+  const { prayers, handleCheck, currentDay, goToNextDay, goToPreviousDay, loading, errorMsg } =
+    usePrayerTimes()
 
   return (
     <>
@@ -31,11 +33,19 @@ const Home: FC = () => {
         onPreviousDay={goToPreviousDay}
         onNextDay={goToNextDay}
       />
-      <FlatList
-        data={prayers}
-        renderItem={({ item }) => <PrayerItem item={item} handleCheck={handleCheck} />}
-        keyExtractor={(item) => item.id.toString()}
-      />
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#e91e63" />
+        </View>
+      ) : errorMsg ? (
+        <Text style={styles.errorText}>{errorMsg}</Text>
+      ) : (
+        <FlatList
+          data={prayers}
+          renderItem={({ item }) => <PrayerItem item={item} handleCheck={handleCheck} />}
+          keyExtractor={(item) => item.id.toString()}
+        />
+      )}
     </>
   )
 }
@@ -87,5 +97,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginRight: 40,
     color: '#009688',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorText: {
+    fontSize: 18,
+    color: 'red',
+    textAlign: 'center',
+    marginTop: 20,
   },
 })

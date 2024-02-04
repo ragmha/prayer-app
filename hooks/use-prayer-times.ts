@@ -27,6 +27,7 @@ export const usePrayerTimes = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [prayers, setPrayers] = useState<Item[]>([])
   const [currentDay, setCurrentDay] = useState<Date>(new Date())
+  const [loading, setLoading] = useState<boolean>(false)
 
   const fetchPrayerTimes = async (latitude?: number, longitude?: number, date?: Date) => {
     const dateString = date?.toISOString().split('T')[0]
@@ -34,6 +35,7 @@ export const usePrayerTimes = () => {
     const checkedItemskey = `checked_prayers`
 
     try {
+      setLoading(true)
       const cachedData = await AsyncStorage.getItem(PRAYER_TIME_STORAGE_KEY)
       const cachedPrayerTimes = JSON.parse(cachedData || '{}')
 
@@ -77,6 +79,7 @@ export const usePrayerTimes = () => {
       await AsyncStorage.setItem(TIMESTAMP_STORAGE_KEY, new Date().toISOString())
 
       setPrayers(newPrayers)
+      setLoading(false)
 
       const checkedItems = await AsyncStorage.getItem(checkedItemskey)
 
@@ -91,8 +94,32 @@ export const usePrayerTimes = () => {
     } catch (error) {
       console.error(error)
       setErrorMsg(`Failed to fetch prayer times. Please try again later`)
+      setLoading(false)
     }
   }
+
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      if (location) {
+        setLoading(true)
+        // Fetch data for the current day
+        await fetchPrayerTimes(location.coords.latitude, location.coords.longitude, currentDay)
+
+        // You can also fetch data for the previous and next days if needed
+        const previousDay = new Date(currentDay)
+        previousDay.setDate(currentDay.getDate() - 1)
+        await fetchPrayerTimes(location.coords.latitude, location.coords.longitude, previousDay)
+
+        const nextDay = new Date(currentDay)
+        nextDay.setDate(currentDay.getDate() + 1)
+        await fetchPrayerTimes(location.coords.latitude, location.coords.longitude, nextDay)
+
+        setLoading(false)
+      }
+    }
+
+    fetchInitialData()
+  }, [location, currentDay])
 
   useEffect(() => {
     const fetchLocation = async () => {
@@ -158,5 +185,6 @@ export const usePrayerTimes = () => {
     goToPreviousDay,
     goToNextDay,
     handleCheck,
+    loading,
   }
 }
