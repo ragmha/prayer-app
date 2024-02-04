@@ -15,6 +15,7 @@ export interface Item {
   title: Prayer
   checked: boolean
   time: string
+  date: string
 }
 
 const CACHE_EXPIRATION_TIME = 24 * 60 * 60 * 1000 // 24 hours in milliseconds
@@ -30,6 +31,7 @@ export const usePrayerTimes = () => {
   const fetchPrayerTimes = async (latitude?: number, longitude?: number, date?: Date) => {
     const dateString = date?.toISOString().split('T')[0]
     const cacheKey = `${dateString}_${latitude}_${longitude}`
+    const checkedItemskey = `checked_prayers`
 
     try {
       const cachedData = await AsyncStorage.getItem(PRAYER_TIME_STORAGE_KEY)
@@ -66,6 +68,7 @@ export const usePrayerTimes = () => {
         title,
         checked: false,
         time: prayerTimes[title] || '',
+        date: dateString || '',
       }))
 
       const updatedCachedData = { ...cachedPrayerTimes, [cacheKey]: newPrayers }
@@ -74,6 +77,17 @@ export const usePrayerTimes = () => {
       await AsyncStorage.setItem(TIMESTAMP_STORAGE_KEY, new Date().toISOString())
 
       setPrayers(newPrayers)
+
+      const checkedItems = await AsyncStorage.getItem(checkedItemskey)
+
+      if (checkedItems) {
+        const checkedItemsMap = JSON.parse(checkedItems)
+        const updatedPrayers = prayers.map((prayer) => ({
+          ...prayer,
+          checked: !!checkedItemsMap[prayer.id],
+        }))
+        setPrayers(updatedPrayers)
+      }
     } catch (error) {
       console.error(error)
       setErrorMsg(`Failed to fetch prayer times. Please try again later`)
@@ -120,15 +134,20 @@ export const usePrayerTimes = () => {
     await fetchPrayerTimes(location?.coords.latitude, location?.coords.longitude, newDay)
   }
 
-  const handleCheck = (id: number) => {
-    const newPrayers = prayers.map((prayer) => {
+  const handleCheck = async (id: number) => {
+    const checkedPrayers = JSON.parse((await AsyncStorage.getItem('checked_prayers')) || '{}')
+
+    const updatedPrayers = prayers.map((prayer) => {
       if (prayer.id === id) {
-        return { ...prayer, checked: !prayer.checked }
+        const updatedPrayer = { ...prayer, checked: !prayer.checked }
+        checkedPrayers[id] = updatedPrayer.checked
+        return updatedPrayer
       }
       return prayer
     })
 
-    setPrayers(newPrayers)
+    await AsyncStorage.setItem('checked_prayers', JSON.stringify(checkedPrayers))
+    setPrayers(updatedPrayers)
   }
 
   return {
