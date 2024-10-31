@@ -18,6 +18,8 @@ export interface Item {
   date: string
 }
 
+const checkedItemsKey = 'checked_prayers'
+
 export const usePrayerTimes = () => {
   const [location, setLocation] = useState<Location.LocationObject | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -27,14 +29,12 @@ export const usePrayerTimes = () => {
 
   const fetchPrayerTimes = async (latitude?: number, longitude?: number, date?: Date) => {
     const dateString = date?.toISOString().split('T')[0]
-    const checkedItemskey = `checked_prayers`
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
 
     try {
       setLoading(true)
-      const TimeZone = 'Europe/Helsinki'
-
       const response = await fetch(
-        `http://api.aladhan.com/v1/timings/${dateString}?latitude=${latitude}&longitude=${longitude}&method=2&timezonestring=${TimeZone}`,
+        `http://api.aladhan.com/v1/timings/${dateString}?latitude=${latitude}&longitude=${longitude}&method=3&timezonestring=${timeZone}&school=1`,
       )
 
       if (!response.ok) {
@@ -44,92 +44,60 @@ export const usePrayerTimes = () => {
       const data = await response.json()
       const prayerTimes = data.data.timings
 
+      const checkedItems = await AsyncStorage.getItem(checkedItemsKey)
+      const checkedItemsMap = checkedItems ? JSON.parse(checkedItems) : {}
+
       const newPrayers: Item[] = Object.values(Prayer).map((title, index) => ({
         id: index + 1,
         title,
-        checked: false,
+        checked: !!checkedItemsMap[index + 1],
         time: prayerTimes[title] || '',
         date: dateString || '',
       }))
 
       setPrayers(newPrayers)
-      setLoading(false)
-
-      const checkedItems = await AsyncStorage.getItem(checkedItemskey)
-
-      if (checkedItems) {
-        const checkedItemsMap = JSON.parse(checkedItems)
-        const updatedPrayers = newPrayers.map((prayer) => ({
-          ...prayer,
-          checked: !!checkedItemsMap[prayer.id],
-        }))
-        setPrayers(updatedPrayers)
-      }
     } catch (error) {
       console.error(error)
-      setErrorMsg(`Failed to fetch prayer times. Please try again later`)
+      setErrorMsg('Failed to fetch prayer times. Please try again later')
+    } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => {
-    const fetchInitialData = async () => {
-      if (location) {
-        setLoading(true)
-
-        await fetchPrayerTimes(location.coords.latitude, location.coords.longitude, currentDay)
-        const previousDay = new Date(currentDay)
-        previousDay.setDate(currentDay.getDate() - 1)
-        await fetchPrayerTimes(location.coords.latitude, location.coords.longitude, previousDay)
-
-        const nextDay = new Date(currentDay)
-        nextDay.setDate(currentDay.getDate() + 1)
-        await fetchPrayerTimes(location.coords.latitude, location.coords.longitude, nextDay)
-
-        setLoading(false)
+  const fetchLocation = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync()
+      if (status !== 'granted') {
+        throw new Error('Permission to access location was denied')
       }
+      const loc = await Location.getCurrentPositionAsync()
+      setLocation(loc)
+    } catch (error) {
+      console.error(error)
+      setErrorMsg('Failed to fetch location. Please try again later')
     }
+  }
 
-    fetchInitialData()
+  useEffect(() => {
+    if (location) {
+      fetchPrayerTimes(location.coords.latitude, location.coords.longitude, currentDay)
+    }
   }, [location, currentDay])
 
   useEffect(() => {
-    const fetchLocation = async () => {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync()
-
-        if (status !== 'granted') {
-          throw new Error(`Permission to access location was denied`)
-        }
-
-        const location = await Location.getCurrentPositionAsync({})
-        setLocation(location)
-      } catch (error) {
-        console.error(error)
-        setErrorMsg(`Failed to fetch location. Please try again later`)
-      }
-    }
-
     fetchLocation()
   }, [])
 
-  const goToPreviousDay = async () => {
-    const newDay = new Date(currentDay)
-    newDay.setDate(currentDay.getDate() - 1)
-    setCurrentDay(newDay)
-    await fetchPrayerTimes(location?.coords.latitude, location?.coords.longitude, newDay)
+  const goToPreviousDay = () => {
+    setCurrentDay((prev) => new Date(prev.setDate(prev.getDate() - 1)))
   }
 
-  const goToNextDay = async () => {
-    const newDay = new Date(currentDay)
-    newDay.setDate(currentDay.getDate() + 1)
-    setCurrentDay(newDay)
-    await fetchPrayerTimes(location?.coords.latitude, location?.coords.longitude, newDay)
+  const goToNextDay = () => {
+    setCurrentDay((prev) => new Date(prev.setDate(prev.getDate() + 1)))
   }
 
   const handleCheck = async (id: number) => {
-    const checkedPrayers = JSON.parse((await AsyncStorage.getItem('checked_prayers')) || '{}')
-
+    const checkedPrayers = JSON.parse((await AsyncStorage.getItem(checkedItemsKey)) || '{}')
     const updatedPrayers = prayers.map((prayer) => {
       if (prayer.id === id) {
         const updatedPrayer = { ...prayer, checked: !prayer.checked }
@@ -138,8 +106,7 @@ export const usePrayerTimes = () => {
       }
       return prayer
     })
-
-    await AsyncStorage.setItem('checked_prayers', JSON.stringify(checkedPrayers))
+    await AsyncStorage.setItem(checkedItemsKey, JSON.stringify(checkedPrayers))
     setPrayers(updatedPrayers)
   }
 
@@ -147,7 +114,6 @@ export const usePrayerTimes = () => {
     errorMsg,
     prayers,
     currentDay,
-    fetchPrayerTimes,
     goToPreviousDay,
     goToNextDay,
     handleCheck,
