@@ -18,10 +18,6 @@ export interface Item {
   date: string
 }
 
-const CACHE_EXPIRATION_TIME = 24 * 60 * 60 * 1000 // 24 hours in milliseconds
-const PRAYER_TIME_STORAGE_KEY = 'prayer_times_cache'
-const TIMESTAMP_STORAGE_KEY = 'prayer_times_timestamp'
-
 export const usePrayerTimes = () => {
   const [location, setLocation] = useState<Location.LocationObject | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -31,27 +27,11 @@ export const usePrayerTimes = () => {
 
   const fetchPrayerTimes = async (latitude?: number, longitude?: number, date?: Date) => {
     const dateString = date?.toISOString().split('T')[0]
-    const cacheKey = `${dateString}_${latitude}_${longitude}`
     const checkedItemskey = `checked_prayers`
 
     try {
       setLoading(true)
-      const cachedData = await AsyncStorage.getItem(PRAYER_TIME_STORAGE_KEY)
-      const cachedPrayerTimes = JSON.parse(cachedData || '{}')
-
-      const cachedTimestamp = await AsyncStorage.getItem(TIMESTAMP_STORAGE_KEY)
-      const lastUpdated = cachedTimestamp ? new Date(cachedTimestamp) : null
-
       const TimeZone = 'Europe/Helsinki'
-
-      const isDateStale =
-        !lastUpdated || // No timestamp available
-        (lastUpdated && Date.now() - lastUpdated.getTime() > CACHE_EXPIRATION_TIME)
-
-      if (cachedPrayerTimes[cacheKey] && !isDateStale) {
-        setPrayers(cachedPrayerTimes[cacheKey])
-        return
-      }
 
       const response = await fetch(
         `http://api.aladhan.com/v1/timings/${dateString}?latitude=${latitude}&longitude=${longitude}&method=2&timezonestring=${TimeZone}`,
@@ -62,7 +42,6 @@ export const usePrayerTimes = () => {
       }
 
       const data = await response.json()
-
       const prayerTimes = data.data.timings
 
       const newPrayers: Item[] = Object.values(Prayer).map((title, index) => ({
@@ -73,11 +52,6 @@ export const usePrayerTimes = () => {
         date: dateString || '',
       }))
 
-      const updatedCachedData = { ...cachedPrayerTimes, [cacheKey]: newPrayers }
-      await AsyncStorage.setItem(PRAYER_TIME_STORAGE_KEY, JSON.stringify(updatedCachedData))
-
-      await AsyncStorage.setItem(TIMESTAMP_STORAGE_KEY, new Date().toISOString())
-
       setPrayers(newPrayers)
       setLoading(false)
 
@@ -85,7 +59,7 @@ export const usePrayerTimes = () => {
 
       if (checkedItems) {
         const checkedItemsMap = JSON.parse(checkedItems)
-        const updatedPrayers = prayers.map((prayer) => ({
+        const updatedPrayers = newPrayers.map((prayer) => ({
           ...prayer,
           checked: !!checkedItemsMap[prayer.id],
         }))
@@ -102,10 +76,8 @@ export const usePrayerTimes = () => {
     const fetchInitialData = async () => {
       if (location) {
         setLoading(true)
-        // Fetch data for the current day
-        await fetchPrayerTimes(location.coords.latitude, location.coords.longitude, currentDay)
 
-        // You can also fetch data for the previous and next days if needed
+        await fetchPrayerTimes(location.coords.latitude, location.coords.longitude, currentDay)
         const previousDay = new Date(currentDay)
         previousDay.setDate(currentDay.getDate() - 1)
         await fetchPrayerTimes(location.coords.latitude, location.coords.longitude, previousDay)
@@ -140,12 +112,6 @@ export const usePrayerTimes = () => {
 
     fetchLocation()
   }, [])
-
-  useEffect(() => {
-    if (location && currentDay) {
-      fetchPrayerTimes(location.coords.latitude, location.coords.longitude, currentDay)
-    }
-  }, [location, currentDay])
 
   const goToPreviousDay = async () => {
     const newDay = new Date(currentDay)
